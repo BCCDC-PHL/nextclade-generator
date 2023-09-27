@@ -3,6 +3,8 @@ import os, sys
 import pandas as pd 
 import numpy as np
 
+
+# environment variables need to be set with NCBI credentials, both email and API key (from creating an account)
 Entrez.email = os.environ['NCBI_EMAIL']
 Entrez.api_key = os.environ['NCBI_API_KEY']
 
