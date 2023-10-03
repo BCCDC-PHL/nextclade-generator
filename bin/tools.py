@@ -33,16 +33,16 @@ def write_fasta(seqs, outpath):
 	return True
 
 complement_dict = {'A':'T', 'C':'G', 'G':'C', 'T':'A', 
-                    'W':'S', 'R':'Y', 'K':'M', 'Y':'R', 'S':'W', 'M':'K',
-                    'B':'V', 'D':'H', 'H':'D', 'V':'B',
-                    '*':'*', 'N':'N', '-':'-'}
+					'W':'S', 'R':'Y', 'K':'M', 'Y':'R', 'S':'W', 'M':'K',
+					'B':'V', 'D':'H', 'H':'D', 'V':'B',
+					'*':'*', 'N':'N', '-':'-'}
 
 def reverse_and_complement(seq):
-    rseq = seq[::-1]
-    rcseq = ''
-    for i in rseq:  # reverse order
-        rcseq += complement_dict[i]
-    return rcseq
+	rseq = seq[::-1]
+	rcseq = ''
+	for i in rseq:  # reverse order
+		rcseq += complement_dict[i]
+	return rcseq
 
 codon_dict = {'TTT':'F', 'TTC':'F', 'TTA':'L', 'TTG':'L',
 'TCT':'S', 'TCC':'S', 'TCA':'S', 'TCG':'S',
@@ -202,18 +202,22 @@ def init_aligner(mode='global', open_gap=-1.0, x_gap=-0.1):
 	aligner.query_end_gap_score = 0.0
 	return aligner
 
-def get_boundaries(str):
-    gap_prefix = re.compile('^[-]+')
-    gap_suffix = re.compile('[-]+$')
-    # return a tuple giving indices of subsequence without gap prefix and suffix
-    res = [0,len(str)]
-    left = gap_prefix.findall(str)
-    right = gap_suffix.findall(str)
-    if left:
-        res[0] = len(left[0])
-    if right:
-        res[1] = len(str) - len(right[0])
-    return res
+def get_boundaries(string):
+
+	if isinstance(string, SeqRecord):
+		string = str(string.seq)
+
+	gap_prefix = re.compile('^[-]+')
+	gap_suffix = re.compile('[-]+$')
+	# return a tuple giving indices of subsequence without gap prefix and suffix
+	res = [0,len(string)]
+	left = gap_prefix.findall(string)
+	right = gap_suffix.findall(string)
+	if left:
+		res[0] = len(left[0])
+	if right:
+		res[1] = len(string) - len(right[0])
+	return res
 
 # performs a pairwise alignment between two Biopython SeqRecord objects
 def pairwise_alignment(aligner, ref, qry):
@@ -234,10 +238,50 @@ def pairwise_alignment(aligner, ref, qry):
 	if isinstance(ref, SeqRecord):
 		ref = str(ref.seq)
 	if isinstance(qry, SeqRecord):
-		ref = str(ref.seq)
+		qry = str(qry.seq)
 	ref_aln, qry_aln = next(aligner.align(ref, qry))
 	# cut down the alignment to only the region of interest (that which overlaps with reference)
 	start, stop = get_boundaries(ref_aln)
 	ref_aln = ref_aln[start:stop]
 	qry_aln = qry_aln[start:stop]
 	return ref_aln, qry_aln
+
+def get_mutations(ref, qry):
+	mutations = []
+	insertion = []
+	deletion = []
+
+	if isinstance(ref, SeqRecord):
+		ref = str(ref.seq)
+	if isinstance(qry, SeqRecord):
+		qry = str(qry.seq)
+
+	ref_pos = 0
+	for ref_char, qry_char in zip(ref, qry):
+		# increment the ref_pos at any valid reference position
+		if ref_char != '-':  
+			ref_pos += 1
+
+		if ref_char == '-':     # insertion
+			if deletion: 
+				mutations += [("".join(deletion), ref_pos-1, "-")]
+				deletion = []	
+			insertion += qry_char
+		elif qry_char == '-':   # deletion
+			if insertion:
+				mutations += [("-", ref_pos-1, "".join(insertion))]
+				insertion = []
+			deletion += ref_char
+
+		else:					# neither insertion nor deletion
+			if insertion:
+				mutations += [("-", ref_pos-1, "".join(insertion))]
+				insertion = []
+			if deletion: 
+				mutations += [("".join(deletion), ref_pos-1, "-")]
+				deletion = []
+
+			if ref_char != qry_char: # and qry_char != "X": 	# standard snp mismatch 
+				mutations += [(ref_char, ref_pos, qry_char)]
+
+	return mutations
